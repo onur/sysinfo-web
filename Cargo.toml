@@ -1,0 +1,27 @@
+[package]
+name = "sysinfo-web"
+description = "Lightweight system monitoring tool built on top of sysinfo"
+version = "0.1.0-pre"
+authors = ["Onur Aslan <onur@onur.im>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/onur/sysinfo-web"
+documentation = "https://docs.rs/sysinfo-web"
+
+[dependencies]
+serde = "0.9"
+serde_json = "0.9"
+iron = "0.5"
+hostname = "0.1"
+
+[dependencies.sysinfo]
+git = "https://github.com/GuillaumeGomez/sysinfo.git"
+rev = "48709f6626961c42747fb73aa6da88ced9868343"
+
+[dev-dependencies]
+serde_derive = "0.9"
+
+[[bin]]
+name = "sysinfo-web"
+test = false
+doc = false
