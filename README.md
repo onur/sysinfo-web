@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/onur/sysinfo-web/master/LICENSE)
 [![Crates.io](https://img.shields.io/crates/v/sysinfo-web.svg)](https://crates.io/crates/sysinfo-web)
 
-Lightweight system monitoring tool built on top of
+Lightweight web based process viewer built on top of 
 [sysinfo](https://github.com/GuillaumeGomez/sysinfo).
 
 [See a demo of sysinfo-web](https://docs.rs/@sysinfo/).

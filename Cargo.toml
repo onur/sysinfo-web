@@ -1,6 +1,6 @@
 [package]
 name = "sysinfo-web"
-description = "Lightweight system monitoring tool built on top of sysinfo"
+description = "Lightweight web based process viewer built on top of sysinfo"
 version = "0.1.0-pre"
 authors = ["Onur Aslan <onur@onur.im>"]
 license = "MIT"

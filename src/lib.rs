@@ -1,4 +1,4 @@
-//! Lightweight system monitoring tool built on top of
+//! Lightweight web based process viewer built on top of 
 //! [sysinfo](https://github.com/GuillaumeGomez/sysinfo).
 //! [See more info in GitHub repository](https://github.com/onur/sysinfo-web).
 
