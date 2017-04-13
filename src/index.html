@@ -12,9 +12,6 @@ h2 {
     font-size: 1.2em;
     text-align: center;
 }
-div.active {
-    color: blue;
-}
 div.sort {
     cursor: pointer;
 }
@@ -134,7 +131,10 @@ div.sort {
                         <thead>
                             <tr>
                                 <th v-for="(c, column) in columns">
-                                    <div v-on:click="sortBy(column)" v-bind:class="{active: sortKey == columns[column] }" class="sort">{{ column }}</div>
+                                    <div v-on:click="sortBy(column)"
+                                         v-bind:class="{ 'text-info': sortKey == columns[column] && reverse,
+                                                         'text-warning': sortKey == columns[column] && !reverse,
+                                                         'sort': true }">{{ column }}</div>
                                 </th>
                             </tr>
                         </thead>
@@ -196,12 +196,11 @@ var sysinfo = new Vue({
                 return [];
             }
             var self = this;
+            var order = self.reverse ? 1 : -1;
             return this.sysinfo.process_list.sort(function(a, b) {
-                if (self.reverse) {
-                    return a[self.sortKey] < b[self.sortKey];
-                } else {
-                    return a[self.sortKey] > b[self.sortKey];
-                }
+                a = a[self.sortKey];
+                b = b[self.sortKey];
+                return (a === b ? 0 : a > b ? 1 : -1) * order;
             });
         },
     },
