@@ -6,10 +6,15 @@ use iron::request::Request;
 use iron::middleware::Handler;
 use iron::mime::Mime;
 
+use sysinfo::{System, SystemExt};
+use std::sync::{Arc, Mutex};
+use SysinfoExt;
+use serde_json;
+
 
 const INDEX_HTML: &'static str = include_str!("index.html");
 
-struct SysinfoIronHandler;
+struct SysinfoIronHandler(Arc<Mutex<System>>);
 
 
 impl Handler for SysinfoIronHandler {
@@ -21,9 +26,12 @@ impl Handler for SysinfoIronHandler {
                                        "text/html".parse::<Mime>().unwrap(),
                                        INDEX_HTML)))
                 } else {
+                    let mut system = self.0.lock().unwrap();
+                    system.refresh_all();
+                    let sysinfo = SysinfoExt::new(&system);
                     Ok(Response::with((status::Ok,
                                        "application/json".parse::<Mime>().unwrap(),
-                                       sysinfo_json_str())))
+                                       serde_json::to_string(&sysinfo).unwrap_or(String::new()))))
                 }
             },
             None => Ok(Response::with((status::NotFound, "Not found")))
@@ -33,20 +41,10 @@ impl Handler for SysinfoIronHandler {
 
 
 pub fn start_web_server(sock_addr: Option<String>) -> HttpResult<Listening> {
-    let mut iron = Iron::new(SysinfoIronHandler);
-    iron.threads = 2;
+    let system = Arc::new(Mutex::new(System::new()));
+    let mut iron = Iron::new(SysinfoIronHandler(system));
+    iron.threads = 4;
     iron.http(sock_addr.unwrap_or("localhost:3000".to_owned()))
-}
-
-
-fn sysinfo_json_str() -> String {
-    use SysinfoExt;
-    use sysinfo::{System, SystemExt};
-    use serde_json;
-    let mut system = System::new();
-    system.refresh_all();
-    let sysinfo = SysinfoExt::new(&system);
-    serde_json::to_string(&sysinfo).unwrap_or(String::new())
 }
 
 
