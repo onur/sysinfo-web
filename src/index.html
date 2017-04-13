@@ -12,6 +12,12 @@ h2 {
     font-size: 1.2em;
     text-align: center;
 }
+div.active {
+    color: blue;
+}
+div.sort {
+    cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -127,16 +133,13 @@ h2 {
                     <table class="table table-striped table-hover">
                         <thead>
                             <tr>
-                                <td>PID</td>
-                                <td>Name</td>
-                                <td>UID</td>
-                                <td>GID</td>
-                                <td>CPU</td>
-                                <td>Memory</td>
+                                <th v-for="(c, column) in columns">
+                                    <div v-on:click="sortBy(column)" v-bind:class="{active: sortKey == columns[column] }" class="sort">{{ column }}</div>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="process in sysinfo.process_list">
+                            <tr v-for="process in sorter">
                                 <td>{{ process.pid }}</td>
                                 <td>{{ process.name | truncate }}</td>
                                 <td>{{ process.uid }}</td>
@@ -156,6 +159,9 @@ h2 {
 var sysinfo = new Vue({
     el: '#sysinfo',
     data: {
+        columns: {"PID": "pid", "Name": "name", "UID": "uid", "GID": "gid", "CPU": "cpu_usage", "Memory": "memory"},
+        sortKey: "pid",
+        reverse: false,
         sysinfo: null,
     },
     created: function() {
@@ -171,9 +177,33 @@ var sysinfo = new Vue({
             xhr.open('GET', 'sysinfo.json');
             xhr.onload = function() {
                 self.sysinfo = JSON.parse(xhr.responseText);
+                var values = [];
+                for (proc in self.sysinfo.process_list) {
+                    values.push(self.sysinfo.process_list[proc]);
+                }
+                self.sysinfo.process_list = values;
             }
             xhr.send();
-        }
+        },
+        sortBy: function(sortKey) {
+            this.reverse = (this.sortKey == this.columns[sortKey]) ? ! this.reverse : false;
+            this.sortKey = this.columns[sortKey];
+        },
+    },
+    computed: {
+        sorter: function() {
+            if (this.sysinfo == null) {
+                return [];
+            }
+            var self = this;
+            return this.sysinfo.process_list.sort(function(a, b) {
+                if (self.reverse) {
+                    return a[self.sortKey] < b[self.sortKey];
+                } else {
+                    return a[self.sortKey] > b[self.sortKey];
+                }
+            });
+        },
     },
     filters: {
         readableKbytes: function(kbytes) {
