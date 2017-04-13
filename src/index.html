@@ -161,8 +161,8 @@ var sysinfo = new Vue({
     el: '#sysinfo',
     data: {
         columns: {"PID": "pid", "Name": "name", "UID": "uid", "GID": "gid", "CPU": "cpu_usage", "Memory": "memory"},
-        sortKey: "pid",
-        reverse: false,
+        sortKey: "cpu_usage",
+        reverse: true,
         sysinfo: null,
     },
     created: function() {
@@ -187,7 +187,7 @@ var sysinfo = new Vue({
             xhr.send();
         },
         sortBy: function(sortKey) {
-            this.reverse = (this.sortKey == this.columns[sortKey]) ? ! this.reverse : false;
+            this.reverse = (this.sortKey == this.columns[sortKey]) ? ! this.reverse : true;
             this.sortKey = this.columns[sortKey];
         },
     },
@@ -197,7 +197,7 @@ var sysinfo = new Vue({
                 return [];
             }
             var self = this;
-            var order = self.reverse ? 1 : -1;
+            var order = self.reverse ? -1 : 1;
             return this.sysinfo.process_list.sort(function(a, b) {
                 a = a[self.sortKey];
                 b = b[self.sortKey];
