@@ -109,9 +109,10 @@ h2 {
                         <tbody>
                             <tr v-for="component in sysinfo.components_list">
                                 <td>{{ component.label }}</td>
-                                <td>{{ component.temperature }}</td>
-                                <td>{{ component.max }}</td>
-                                <td>{{ component.critical }}</td>
+                                <td>{{ component.temperature }} &deg;C</td>
+                                <td>{{ component.max }} &deg;C</td>
+                                <td v-if="component.critical && component.critical != ''">{{ component.critical }} &deg;C</td>
+                                <td v-else></td>
                             </tr>
                         </tbody>
                     </table>
