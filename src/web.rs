@@ -46,9 +46,3 @@ pub fn start_web_server(sock_addr: Option<String>) -> HttpResult<Listening> {
     iron.threads = 4;
     iron.http(sock_addr.unwrap_or("localhost:3000".to_owned()))
 }
-
-
-#[test]
-fn test_sysinfo_json_str() {
-    assert!(!sysinfo_json_str().is_empty());
-}
