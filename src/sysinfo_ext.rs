@@ -30,6 +30,7 @@ impl<'a> SysinfoExt<'a> {
                      {
                          let mut t = p.1.clone();
                          // clear tasks to save up some space
+                         #[cfg(target_os = "linux")]
                          t.tasks.clear();
                          // clear environment variables
                          t.environ.clear();
