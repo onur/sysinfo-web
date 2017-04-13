@@ -89,6 +89,7 @@ impl<'a> Serialize for Ser<'a, Process> {
         map.serialize_entry("cpu_usage", &self.0.cpu_usage)?;
         map.serialize_entry("uid", &self.0.uid)?;
         map.serialize_entry("gid", &self.0.gid)?;
+        #[cfg(target_os = "linux")]
         map.serialize_entry("tasks", &Ser::new(&self.0.tasks))?;
         map.end()
     }
