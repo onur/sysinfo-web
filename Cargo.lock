@@ -1,6 +1,6 @@
 [root]
 name = "sysinfo-web"
-version = "0.1.0-pre2"
+version = "0.1.0-pre3"
 dependencies = [
  "hostname 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "iron 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
