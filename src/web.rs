@@ -26,13 +26,22 @@ struct DataHandler {
 
 impl DataHandler {
     fn can_update_system_info(&self) -> bool {
-        SystemTime::now().duration_since(*self.last_connection.lock().unwrap())
+        let old = {
+            if let Ok(s) = self.last_connection.lock() {
+                (*s).clone()
+            } else {
+                SystemTime::now()
+            }
+        };
+        SystemTime::now().duration_since(old)
                          .unwrap()
                          .as_secs() < REFRESH_DELAY
     }
 
     fn update_last_connection(&self) {
-        *self.last_connection.lock().unwrap() = SystemTime::now();
+        if let Ok(mut s) = self.last_connection.lock() {
+            *s = SystemTime::now();
+        }
     }
 }
 
