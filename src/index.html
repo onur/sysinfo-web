@@ -7,6 +7,7 @@
 <title>sysinfo-web</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootswatch/3.3.7/simplex/bootstrap.min.css" type="text/css" media="screen"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.2.6/vue.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue-chartjs/2.6.2/vue-chartjs.full.min.js"></script>
 <style type="text/css" media="screen">
 h2 {
     font-size: 1.2em;
@@ -23,6 +24,8 @@ hr.global-cpu-divider {
 <body>
 <div id="sysinfo" class="container" v-if="sysinfo">
     <h2>{{ sysinfo.hostname }} &mdash; {{ sysinfo.uptime }}</h2>
+    <hr/>
+    <line-chart :chart-data="processorUsageHistory.chartData"></line-chart>
     <hr/>
     <div class="row">
         <div class="col-md-6">
@@ -171,9 +174,29 @@ hr.global-cpu-divider {
 
 var sysinfo = new Vue({
     el: '#sysinfo',
+    components: {
+        "line-chart": {
+            extends: VueChartJs.Line,
+            mixins: [VueChartJs.mixins.reactiveProp],
+            mounted: function() {
+                this.renderChart(this.chartData, {
+                    animation: false,
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        yAxes: [{ ticks: { max: 100, min: 0 }}]
+                    },
+                });
+            }
+        },
+    },
     data: {
         columns: {"PID": "pid", "Name": "name", "UID": "uid", "GID": "gid", "CPU": "cpu_usage", "Memory": "memory"},
         sortKey: "cpu_usage",
+        processorUsageHistory: {
+            chartData: null,
+            history: [],
+        },
         reverse: true,
         sysinfo: null,
     },
@@ -195,8 +218,62 @@ var sysinfo = new Vue({
                     values.push(self.sysinfo.process_list[proc]);
                 }
                 self.sysinfo.process_list = values;
+                self.addProcessorUsageHistory(self.sysinfo.processor_list.slice(1));
             }
             xhr.send();
+        },
+        addProcessorUsageHistory: function(data) {
+            var self = this;
+            var processor_list = [];
+            for (processor in data) {
+                processor_list.push({
+                    name: data[processor].name,
+                    usage: Math.floor(data[processor].cpu_usage * 100),
+                    time: new Date(),
+                });
+            }
+            self.processorUsageHistory.history.push(processor_list);
+            if (self.processorUsageHistory.history.length > 300 / 5) {
+                self.processorUsageHistory.history.shift();
+            }
+            self.updateProcessorUsageHistoryChartData();
+        },
+        updateProcessorUsageHistoryChartData: function() {
+            var self = this;
+            var labels = [];
+            var datasets = [];
+            var colors = [
+              'rgb(217, 35, 15)', 'rgb(192, 152, 83)', 'rgb(185, 74, 72)', 'rgb(70, 136, 71)', 'rgb(58, 135, 173)'
+            ];
+
+            for (processor_index in self.processorUsageHistory.history[0]) {
+                var history = [];
+                for (i in self.processorUsageHistory.history) {
+                    history.push(self.processorUsageHistory.history[i][processor_index].usage);
+                }
+                datasets.push({
+                    label: self.processorUsageHistory.history[0][processor_index].name,
+                    data: history,
+                    borderColor: colors[processor_index % 5],
+                });
+            }
+
+            for (var i = 0; i <= 300; i = i + 5) {
+                var future = new Date(self.processorUsageHistory.history[0][0].time);
+                future.setSeconds(future.getSeconds() + i);
+                if (i % 60 == 0) {
+                    labels.push(('0' + future.getHours()).slice(-2) + ':' +
+                                ('0' + future.getMinutes()).slice(-2) + ':' +
+                                ('0' + future.getSeconds()).slice(-2));
+                } else  {
+                    labels.push('');
+                }
+            }
+
+            self.processorUsageHistory.chartData = {
+                labels: labels,
+                datasets: datasets,
+            };
         },
         sortBy: function(sortKey) {
             this.reverse = (this.sortKey == this.columns[sortKey]) ? ! this.reverse : true;
