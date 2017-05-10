@@ -199,12 +199,14 @@ var sysinfo = new Vue({
         },
         reverse: true,
         sysinfo: null,
+        update_interval: 5000, // milliseconds
+        chart_length: 300,     // seconds
     },
     created: function() {
         this.fetchData();
         setInterval(function() {
             this.fetchData();
-        }.bind(this), 5000); 
+        }.bind(this), this.update_interval); 
     },
     methods: {
         fetchData: function() {
@@ -233,7 +235,7 @@ var sysinfo = new Vue({
                 });
             }
             self.processorUsageHistory.history.push(processor_list);
-            if (self.processorUsageHistory.history.length > 300 / 5) {
+            if (self.processorUsageHistory.history.length > self.chart_length / (self.update_interval / 1000)) {
                 self.processorUsageHistory.history.shift();
             }
             self.updateProcessorUsageHistoryChartData();
@@ -258,7 +260,7 @@ var sysinfo = new Vue({
                 });
             }
 
-            for (var i = 0; i <= 300; i = i + 5) {
+            for (var i = 0; i <= self.chart_length; i = i + 5) {
                 var future = new Date(self.processorUsageHistory.history[0][0].time);
                 future.setSeconds(future.getSeconds() + i);
                 if (i % 60 == 0) {
