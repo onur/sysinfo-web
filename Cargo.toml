@@ -2,7 +2,7 @@
 name = "sysinfo-web"
 description = "Lightweight web based process viewer built on top of sysinfo"
 version = "0.1.0-pre3"
-authors = ["Onur Aslan <onur@onur.im>"]
+authors = ["Onur Aslan <onur@onur.im>", "Guillaume Gomez <guillaume1.gomez@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/onur/sysinfo-web"
