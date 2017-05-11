@@ -30,6 +30,9 @@ hr.global-cpu-divider {
 div.memory-pie-chart-container {
     padding: 0 40px;
 }
+.progress-bar-ours {
+    background-color: #69D2E7;
+}
 </style>
 </head>
 <body>
@@ -50,7 +53,7 @@ div.memory-pie-chart-container {
                                 <div class="col-xs-2">Global</div>
                                 <div class="col-xs-10">
                                     <div class="progress">
-                                        <div class="progress-bar progress-bar-info" :style="'width: ' + (sysinfo.processor_list[0].cpu_usage * 100) + '%'"></div>
+                                        <div class="progress-bar progress-bar-ours" :style="'width: ' + (sysinfo.processor_list[0].cpu_usage * 100) + '%'"></div>
                                     </div>
                                 </div>
                             </div>
@@ -59,7 +62,7 @@ div.memory-pie-chart-container {
                                 <div class="col-xs-2">{{ processor.name }}</div>
                                 <div class="col-xs-10">
                                     <div class="progress">
-                                        <div class="progress-bar progress-bar-info" :style="'width: ' + (processor.cpu_usage * 100) + '%'"></div>
+                                        <div class="progress-bar progress-bar-ours" :style="'width: ' + (processor.cpu_usage * 100) + '%'"></div>
                                     </div>
                                 </div>
                             </div>
