@@ -215,6 +215,11 @@ var sysinfo = new Vue({
         sysinfo: null,
         update_interval: 5000, // milliseconds
         chart_length: 300,     // seconds
+        chart_colors: [
+            '#69D2E7', '#FE4365', '#ECD078', '#53777A', '#FC9D9A', '#D95B43',
+            '#E0E4CC', '#F9CDAD', '#C02942', '#F38630', '#C8C8A9', '#542437',
+            '#FA6900', '#83AF9B', '#A7DBD8',
+        ],
     },
     created: function() {
         this.fetchData();
@@ -258,9 +263,6 @@ var sysinfo = new Vue({
             var self = this;
             var labels = [];
             var datasets = [];
-            var colors = [
-              'rgb(217, 35, 15)', 'rgb(192, 152, 83)', 'rgb(185, 74, 72)', 'rgb(70, 136, 71)', 'rgb(58, 135, 173)'
-            ];
 
             for (processor_index in self.processorUsageHistory.history[0]) {
                 var history = [];
@@ -270,7 +272,8 @@ var sysinfo = new Vue({
                 datasets.push({
                     label: self.processorUsageHistory.history[0][processor_index].name,
                     data: history,
-                    borderColor: colors[processor_index % 5],
+                    borderColor: self.chart_colors[processor_index % self.chart_colors.length],
+                    backgroundColor: 'rgba(255, 255, 255, 0)'
                 });
             }
 
