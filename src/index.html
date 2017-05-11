@@ -102,12 +102,12 @@ div.memory-pie-chart-container {
                 <div class="panel-body">
                     <div class="row">
                         <div class="col-xs-6 memory-pie-chart-container">
-                            <pie-chart :chart-data="memoryUsageChartData" :options="{ title: { display: true, text: 'Memory' },
-                                                                                      legend: { display: false } }"></pie-chart>
+                            <doughnut-chart :chart-data="memoryUsageChartData" :options="{ title: { display: true, text: 'Memory' },
+                                                                                      legend: { display: false } }"></doughnut-chart>
                         </div>
                         <div class="col-xs-6 memory-pie-chart-container">
-                            <pie-chart :chart-data="swapUsageChartData" :options="{ title: { display: true, text: 'Swap' },
-                                                                                    legend: { display: false } }"></pie-chart>
+                            <doughnut-chart :chart-data="swapUsageChartData" :options="{ title: { display: true, text: 'Swap' },
+                                                                                    legend: { display: false } }"></doughnut-chart>
                         </div>
                     </div>
                     <table class="table table-striped table-hover">
@@ -211,8 +211,8 @@ var sysinfo = new Vue({
                 });
             }
         },
-        "pie-chart": {
-            extends: VueChartJs.Pie,
+        "doughnut-chart": {
+            extends: VueChartJs.Doughnut,
             mixins: [VueChartJs.mixins.reactiveProp],
             props: ['options'],
             mounted: function() {
