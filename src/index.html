@@ -24,6 +24,9 @@ hr.global-cpu-divider {
 .nav-tabs {
     margin-bottom: 15px;
 }
+div.memory-pie-chart-container {
+    padding: 0 40px;
+}
 </style>
 </head>
 <body>
@@ -95,11 +98,13 @@ hr.global-cpu-divider {
             <div class="panel panel-default">
                 <div class="panel-body">
                     <div class="row">
-                        <div class="col-xs-6">
-                            <pie-chart :chart-data="memoryUsageChartData" :options="{ title: { display: true, text: 'Memory' }}"></pie-chart>
+                        <div class="col-xs-6 memory-pie-chart-container">
+                            <pie-chart :chart-data="memoryUsageChartData" :options="{ title: { display: true, text: 'Memory' },
+                                                                                      legend: { display: false } }"></pie-chart>
                         </div>
-                        <div class="col-xs-6">
-                            <pie-chart :chart-data="swapUsageChartData" :options="{ title: { display: true, text: 'Swap' }}"></pie-chart>
+                        <div class="col-xs-6 memory-pie-chart-container">
+                            <pie-chart :chart-data="swapUsageChartData" :options="{ title: { display: true, text: 'Swap' },
+                                                                                    legend: { display: false } }"></pie-chart>
                         </div>
                     </div>
                     <table class="table table-striped table-hover">
