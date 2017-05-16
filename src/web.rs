@@ -22,6 +22,7 @@ struct SysinfoIronHandler(Arc<DataHandler>);
 struct DataHandler {
     system: RwLock<System>,
     last_connection: Mutex<SystemTime>,
+    json_output: RwLock<String>,
 }
 
 impl DataHandler {
@@ -46,11 +47,9 @@ impl Handler for SysinfoIronHandler {
                                        INDEX_HTML)))
                 } else {
                     self.0.update_last_connection();
-                    let system = self.0.system.read().unwrap();
-                    let sysinfo = SysinfoExt::new(&system);
                     Ok(Response::with((status::Ok,
                                        "application/json".parse::<Mime>().unwrap(),
-                                       serde_json::to_string(&sysinfo).unwrap_or(String::new()))))
+                                       self.0.json_output.read().unwrap().clone())))
                 }
             },
             None => Ok(Response::with((status::NotFound, "Not found")))
@@ -63,6 +62,7 @@ pub fn start_web_server(sock_addr: Option<String>) -> HttpResult<Listening> {
     let data_handler = Arc::new(DataHandler {
         system: RwLock::new(System::new()),
         last_connection: Mutex::new(SystemTime::now()),
+        json_output: RwLock::new(String::from("[]")),
     });
     let data_handler_clone = data_handler.clone();
     thread::spawn(move || {
@@ -71,6 +71,12 @@ pub fn start_web_server(sock_addr: Option<String>) -> HttpResult<Listening> {
                 {
                     let mut system = data_handler_clone.system.write().unwrap();
                     system.refresh_all();
+                    let sysinfo = SysinfoExt::new(&system);
+                    let mut json_output = data_handler_clone.json_output.write().unwrap();
+                    json_output.clear();
+                    use std::fmt::Write;
+                    json_output.write_str(&serde_json::to_string(&sysinfo)
+                                          .unwrap_or(String::from("[]"))).unwrap();
                 }
                 thread::sleep(Duration::new(5, 0));
             } else {
