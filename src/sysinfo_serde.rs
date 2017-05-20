@@ -26,9 +26,6 @@
 //!
 //! ```
 
-extern crate serde;
-extern crate sysinfo;
-
 
 use std::collections::HashMap;
 use serde::{Serialize, Serializer};
