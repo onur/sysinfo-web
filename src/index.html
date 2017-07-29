@@ -171,11 +171,9 @@ div.memory-pie-chart-container {
                     </table>
                 </div>
             </div>
-            <div class="panel panel-default" v-if="sysinfo.show_bandwith_usage">
+            <div class="panel panel-default">
                 <div class="panel-body">
-                    <line-chart :chart-data="bandwithUsageHistory.chartData" :options="{title: {display: true, text: 'Network Usage'},
-                                                                                        scales: {yAxes: [{ scaleLabel: { display: true, labelString: 'Mbit/sec' }}]}}"></line-chart>
-
+                    <line-chart :chart-data="bandwithUsageHistory.chartData" :options="{title: {display: true, text: 'Network Usage'}, scales: {yAxes: [{ scaleLabel: { display: true, labelString: 'Mbit/sec' }}]}}"></line-chart>
                     <table class="table table-striped table-hover">
                         <tbody>
                             <tr>
@@ -300,9 +298,7 @@ var sysinfo = new Vue({
                 self.sysinfo.process_list = values;
                 self.addProcessorUsageHistory(self.sysinfo.processor_list.slice(1));
                 self.updateMemoryUsageChartData(self.sysinfo.memory);
-                if (self.sysinfo.show_bandwith_usage) {
-                    self.updateBandwithUsageChartData(self.sysinfo.bandwith);
-                }
+                self.updateBandwithUsageChartData(self.sysinfo.bandwith);
             }
             xhr.send();
         },

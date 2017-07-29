@@ -132,8 +132,8 @@ impl<'a> Serialize for Ser<'a, Disk> {
                                  DiskType::SSD => "SSD".to_owned(),
                                  DiskType::Unknown(size) => format!("Unknown({})", size),
                              })?;
-        map.serialize_entry("name", self.0.get_name())?;
-        map.serialize_entry("file_system", self.0.get_file_system())?;
+        map.serialize_entry("name", self.0.get_name().to_str().unwrap())?;
+        map.serialize_entry("file_system", ::std::str::from_utf8(self.0.get_file_system()).unwrap())?;
         map.serialize_entry("mount_point", self.0.get_mount_point())?;
         map.serialize_entry("total_space", &self.0.get_total_space())?;
         map.serialize_entry("available_space", &self.0.get_available_space())?;
