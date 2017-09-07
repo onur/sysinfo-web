@@ -66,11 +66,17 @@ pub fn start_web_server(sock_addr: Option<String>) -> HttpResult<Listening> {
     });
     let data_handler_clone = data_handler.clone();
     thread::spawn(move || {
+        let mut sleeping = false;
         loop {
             if data_handler_clone.can_update_system_info() {
                 {
                     let mut system = data_handler_clone.system.write().unwrap();
                     system.refresh_all();
+                    // refresh it twice to provide accurate information after wake up
+                    if sleeping {
+                        system.refresh_all();
+                        sleeping = false;
+                    }
                     let sysinfo = SysinfoExt::new(&system);
                     let mut json_output = data_handler_clone.json_output.write().unwrap();
                     json_output.clear();
@@ -82,6 +88,7 @@ pub fn start_web_server(sock_addr: Option<String>) -> HttpResult<Listening> {
             } else {
                 // If we don't need to refresh the system information, we can sleep a lot less.
                 thread::sleep(Duration::from_millis(500));
+                sleeping = true;
             }
         }
     });
