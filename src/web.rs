@@ -1,22 +1,38 @@
 
 use iron::{Iron, IronResult, Listening, status};
 use iron::error::HttpResult;
-use iron::response::Response;
+use iron::response::{Response, WriteBody};
 use iron::request::Request;
 use iron::middleware::Handler;
 use iron::mime::Mime;
 
 use sysinfo::{System, SystemExt};
+
+use flate2::Compression;
+use flate2::write::GzEncoder;
+
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, SystemTime};
+use std::io::{self, Write};
+
 use SysinfoExt;
 use serde_json;
 
 
-const INDEX_HTML: &'static str = include_str!("index.html");
+const INDEX_HTML: &'static [u8] = include_bytes!("index.html");
 const FAVICON: &'static [u8] = include_bytes!("../resources/favicon.ico");
 const REFRESH_DELAY: u64 = 60 * 10; // 10 minutes
+
+struct GzipContent(Box<WriteBody>);
+
+impl WriteBody for GzipContent {
+    fn write_body(&mut self, w: &mut Write) -> io::Result<()> {
+        let mut w = GzEncoder::new(w, Compression::default());
+        self.0.write_body(&mut w)?;
+        w.finish().map(|_| ())
+    }
+}
 
 struct SysinfoIronHandler(Arc<DataHandler>);
 
@@ -38,26 +54,69 @@ impl DataHandler {
     }
 }
 
+fn return_gzip_or_not(req: &mut Request,
+                      static_content: Option<&'static [u8]>,
+                      content: Option<String>,
+                      typ: &str) -> IronResult<Response> {
+    let mut use_gzip = false;
+
+    if let Some(raw_accept_encoding) = req.headers.get_raw("accept-encoding") {
+        for accept_encoding in raw_accept_encoding {
+            match ::std::str::from_utf8(accept_encoding).map(|s| s.to_lowercase()) {
+                Ok(ref s) if s.contains("gzip") => {
+                    use_gzip = true;
+                    break;
+                }
+                _ => continue,
+            }
+        }
+    }
+    if !use_gzip {
+        Ok(if let Some(s) = static_content {
+            Response::with((status::Ok, typ.parse::<Mime>().unwrap(), s))
+        } else if let Some(s) = content {
+            Response::with((status::Ok, typ.parse::<Mime>().unwrap(), s))
+        } else {
+            Response::with((status::NotFound, "Server issue"))
+        })
+    } else {
+        let mut res = Response::new();
+        res.status = Some(status::Ok);
+        res.body = Some(match (static_content, content) {
+            (Some(s), _) => Box::new(GzipContent(Box::new(s))),
+            (_, Some(s)) => Box::new(GzipContent(Box::new(s))),
+            _ => return Ok(Response::with((status::NotFound, "Server issue"))),
+        });
+        res.headers.append_raw("content-type", typ.as_bytes().to_vec());
+        res.headers.append_raw("content-encoding", vec![b'g', b'z', b'i', b'p']);
+        Ok(res)
+    }
+}
+
 impl Handler for SysinfoIronHandler {
     fn handle(&self, req: &mut Request) -> IronResult<Response> {
-        match req.url.path().last() {
+        match match req.url.path().last() {
             Some(path) => {
                 if *path == "" {
-                    Ok(Response::with((status::Ok,
-                                       "text/html".parse::<Mime>().unwrap(),
-                                       INDEX_HTML)))
+                    1
                 } else if *path == "favicon.ico" {
-                    Ok(Response::with((status::Ok,
-                                       "image/x-icon".parse::<Mime>().unwrap(),
-                                       FAVICON)))
+                    2
                 } else {
-                    self.0.update_last_connection();
-                    Ok(Response::with((status::Ok,
-                                       "application/json".parse::<Mime>().unwrap(),
-                                       self.0.json_output.read().unwrap().clone())))
+                    3
                 }
             },
-            None => Ok(Response::with((status::NotFound, "Not found")))
+            None => 0,
+        } {
+            1 => return_gzip_or_not(req, Some(INDEX_HTML), None, "text/html"),
+            2 => return_gzip_or_not(req, Some(FAVICON), None, "image/x-icon"),
+            3 => {
+                self.0.update_last_connection();
+                return_gzip_or_not(req,
+                                   None,
+                                   Some(self.0.json_output.read().unwrap().clone()),
+                                   "application/json")
+            }
+            _ => Ok(Response::with((status::NotFound, "Not found"))),
         }
     }
 }
