@@ -24,6 +24,7 @@ const INDEX_HTML: &'static [u8] = include_bytes!("index.html");
 const FAVICON: &'static [u8] = include_bytes!("../resources/favicon.ico");
 const REFRESH_DELAY: u64 = 60 * 10; // 10 minutes
 
+/// Simple wrapper to get gzip compressed output on string types.
 struct GzipContent(Box<WriteBody>);
 
 impl WriteBody for GzipContent {
@@ -54,6 +55,9 @@ impl DataHandler {
     }
 }
 
+// Why not just passing `Box<WriteBody>` instead of `static_content` and `content` you ask?
+// Simply because I'd have to implement `Modifier` on my `GzipContent` type and it seems
+// quite annoying to do... So let's just go with that for the moment.
 fn return_gzip_or_not(req: &mut Request,
                       static_content: Option<&'static [u8]>,
                       content: Option<String>,
