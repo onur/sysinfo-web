@@ -55,46 +55,32 @@ impl DataHandler {
     }
 }
 
-// Why not just passing `Box<WriteBody>` instead of `static_content` and `content` you ask?
-// Simply because I'd have to implement `Modifier` on my `GzipContent` type and it seems
-// quite annoying to do... So let's just go with that for the moment.
-fn return_gzip_or_not(req: &mut Request,
-                      static_content: Option<&'static [u8]>,
-                      content: Option<String>,
-                      typ: &str) -> IronResult<Response> {
-    let mut use_gzip = false;
+macro_rules! return_gzip_or_not {
+    ($req:expr, $content:expr, $typ:expr) => {{
+        let mut use_gzip = false;
 
-    if let Some(raw_accept_encoding) = req.headers.get_raw("accept-encoding") {
-        for accept_encoding in raw_accept_encoding {
-            match ::std::str::from_utf8(accept_encoding).map(|s| s.to_lowercase()) {
-                Ok(ref s) if s.contains("gzip") => {
-                    use_gzip = true;
-                    break;
+        if let Some(raw_accept_encoding) = $req.headers.get_raw("accept-encoding") {
+            for accept_encoding in raw_accept_encoding {
+                match ::std::str::from_utf8(accept_encoding).map(|s| s.to_lowercase()) {
+                    Ok(ref s) if s.contains("gzip") => {
+                        use_gzip = true;
+                        break;
+                    }
+                    _ => continue,
                 }
-                _ => continue,
             }
         }
-    }
-    if !use_gzip {
-        Ok(if let Some(s) = static_content {
-            Response::with((status::Ok, typ.parse::<Mime>().unwrap(), s))
-        } else if let Some(s) = content {
-            Response::with((status::Ok, typ.parse::<Mime>().unwrap(), s))
+        if !use_gzip {
+            Ok(Response::with((status::Ok, $typ.parse::<Mime>().unwrap(), $content)))
         } else {
-            Response::with((status::NotFound, "Server issue"))
-        })
-    } else {
-        let mut res = Response::new();
-        res.status = Some(status::Ok);
-        res.body = Some(match (static_content, content) {
-            (Some(s), _) => Box::new(GzipContent(Box::new(s))),
-            (_, Some(s)) => Box::new(GzipContent(Box::new(s))),
-            _ => return Ok(Response::with((status::NotFound, "Server issue"))),
-        });
-        res.headers.append_raw("content-type", typ.as_bytes().to_vec());
-        res.headers.append_raw("content-encoding", vec![b'g', b'z', b'i', b'p']);
-        Ok(res)
-    }
+            let mut res = Response::new();
+            res.status = Some(status::Ok);
+            res.body = Some(Box::new(GzipContent(Box::new($content))));
+            res.headers.append_raw("content-type", $typ.as_bytes().to_vec());
+            res.headers.append_raw("content-encoding", vec![b'g', b'z', b'i', b'p']);
+            Ok(res)
+        }
+    }}
 }
 
 impl Handler for SysinfoIronHandler {
@@ -108,17 +94,16 @@ impl Handler for SysinfoIronHandler {
                 } else {
                     3
                 }
-            },
+            }
             None => 0,
         } {
-            1 => return_gzip_or_not(req, Some(INDEX_HTML), None, "text/html"),
-            2 => return_gzip_or_not(req, Some(FAVICON), None, "image/x-icon"),
+            1 => return_gzip_or_not!(req, INDEX_HTML, "text/html"),
+            2 => return_gzip_or_not!(req, FAVICON, "image/x-icon"),
             3 => {
                 self.0.update_last_connection();
-                return_gzip_or_not(req,
-                                   None,
-                                   Some(self.0.json_output.read().unwrap().clone()),
-                                   "application/json")
+                return_gzip_or_not!(req,
+                                    self.0.json_output.read().unwrap().clone(),
+                                    "application/json")
             }
             _ => Ok(Response::with((status::NotFound, "Not found"))),
         }
