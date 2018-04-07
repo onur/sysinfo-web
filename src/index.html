@@ -82,6 +82,40 @@ div.memory-pie-chart-container {
                     </div>
                 </div>
             </div>
+            <ul class="nav nav-tabs">
+                <li class="active"><a href="#temperature_bars" data-toggle="tab">Temperature</a></li>
+                <li><a href="#temperature_graph" data-toggle="tab">History</a></li>
+            </ul>
+            <div class="panel panel-default">
+                <div class="panel-body">
+                    <div class="tab-content">
+                        <div class="tab-pane fade active in" id="temperature_bars">
+                            <table class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <td>Label</td>
+                                        <td>Temperature</td>
+                                        <td>Max</td>
+                                        <td>Critical</td>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="component in sysinfo.components_list">
+                                        <td>{{ component.label }}</td>
+                                        <td>{{ component.temperature }} &deg;C</td>
+                                        <td>{{ component.max }} &deg;C</td>
+                                        <td v-if="component.critical && component.critical != ''">{{ component.critical }} &deg;C</td>
+                                        <td v-else></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="tab-pane fade" id="temperature_graph">
+                            <line-chart :chart-data="temperatureHistory.chartData" :options="{scales: {yAxes: [{ scaleLabel: { display: true, labelString: 'Temperature (°C)' }}]}}"></line-chart>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="panel panel-default">
                 <div class="panel-body">
                     <table class="table table-striped table-hover">
@@ -103,29 +137,6 @@ div.memory-pie-chart-container {
                                 <td>{{ disk.total_space | readableBytes }}</td>
                                 <td>{{ disk.total_space - disk.available_space | readableBytes }}</td>
                                 <td>{{ disk.available_space | readableBytes }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="panel panel-default">
-                <div class="panel-body">
-                    <table class="table table-striped table-hover">
-                        <thead>
-                            <tr>
-                                <td>Label</td>
-                                <td>Temperature</td>
-                                <td>Max</td>
-                                <td>Critical</td>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="component in sysinfo.components_list">
-                                <td>{{ component.label }}</td>
-                                <td>{{ component.temperature }} &deg;C</td>
-                                <td>{{ component.max }} &deg;C</td>
-                                <td v-if="component.critical && component.critical != ''">{{ component.critical }} &deg;C</td>
-                                <td v-else></td>
                             </tr>
                         </tbody>
                     </table>
@@ -279,6 +290,10 @@ var sysinfo = new Vue({
             chartData: null,
             history: [[], []],
         },
+        temperatureHistory: {
+            chartData: null,
+            history: [],
+        },
         memoryUsageChartData: null,
         swapUsageChartData: null,
         reverse: true,
@@ -312,6 +327,7 @@ var sysinfo = new Vue({
                 self.addProcessorUsageHistory(self.sysinfo.processor_list.slice(1));
                 self.updateMemoryUsageChartData(self.sysinfo.memory);
                 self.updateBandwithUsageChartData(self.sysinfo.bandwith);
+                self.updateTemperatureHistory(self.sysinfo.components_list);
             }
             xhr.send();
         },
@@ -453,6 +469,35 @@ var sysinfo = new Vue({
                         backgroundColor: 'rgba(255, 255, 255, 0)'
                     },
                 ]
+            };
+        },
+        updateTemperatureHistory: function(components) {
+            var self = this;
+            var pos = 0;
+            if (self.temperatureHistory.history.length === 0) {
+                for (var i = 0; i < components.length; ++i) {
+                    self.temperatureHistory.history.push({
+                        label: components[i].label,
+                        data: [],
+                        borderColor: self.chart_colors[i % self.chart_colors.length],
+                        backgroundColor: 'rgba(255, 255, 255, 0)',
+                    });
+                }
+            }
+            for (var i = 0; i < components.length; ++i) {
+                self.temperatureHistory.history[i].data.push(components[i].temperature);
+            }
+
+            if (self.temperatureHistory.history.length > 0 &&
+                self.temperatureHistory.history[0].data.length > self.chart_length / (self.update_interval / 1000)) {
+                for (i = 0; i < self.temperatureHistory.history.length; ++i) {
+                    self.temperatureHistory.history[i].data.shift();
+                }
+            }
+
+            self.temperatureHistory.chartData = {
+                labels: self.generateLabels(),
+                datasets: self.temperatureHistory.history,
             };
         },
         sortBy: function(sortKey) {
