@@ -1,19 +1,24 @@
 
 use iron::{Iron, IronResult, Listening, status};
 use iron::error::HttpResult;
-use iron::response::{Response, WriteBody};
+use iron::response::Response;
+#[cfg(feature = "gzip")]
+use iron::response::WriteBody;
 use iron::request::Request;
 use iron::middleware::Handler;
 use iron::mime::Mime;
 
 use sysinfo::{System, SystemExt};
 
+#[cfg(feature = "gzip")]
 use flate2::Compression;
+#[cfg(feature = "gzip")]
 use flate2::write::GzEncoder;
 
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, SystemTime};
+#[cfg(feature = "gzip")]
 use std::io::{self, Write};
 
 use SysinfoExt;
@@ -25,8 +30,10 @@ const FAVICON: &'static [u8] = include_bytes!("../resources/favicon.ico");
 const REFRESH_DELAY: u64 = 60 * 10; // 10 minutes
 
 /// Simple wrapper to get gzip compressed output on string types.
+#[cfg(feature = "gzip")]
 struct GzipContent(Box<WriteBody>);
 
+#[cfg(feature = "gzip")]
 impl WriteBody for GzipContent {
     fn write_body(&mut self, w: &mut Write) -> io::Result<()> {
         let mut w = GzEncoder::new(w, Compression::default());
@@ -55,6 +62,7 @@ impl DataHandler {
     }
 }
 
+#[cfg(feature = "gzip")]
 macro_rules! return_gzip_or_not {
     ($req:expr, $content:expr, $typ:expr) => {{
         let mut use_gzip = false;
@@ -80,6 +88,13 @@ macro_rules! return_gzip_or_not {
             res.headers.append_raw("content-encoding", vec![b'g', b'z', b'i', b'p']);
             Ok(res)
         }
+    }}
+}
+
+#[cfg(not(feature = "gzip"))]
+macro_rules! return_gzip_or_not {
+    ($req:expr, $content:expr, $typ:expr) => {{
+        Ok(Response::with((status::Ok, $typ.parse::<Mime>().unwrap(), $content)))
     }}
 }
 
@@ -109,7 +124,6 @@ impl Handler for SysinfoIronHandler {
         }
     }
 }
-
 
 pub fn start_web_server(sock_addr: Option<String>) -> HttpResult<Listening> {
     let data_handler = Arc::new(DataHandler {

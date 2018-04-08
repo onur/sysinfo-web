@@ -19,6 +19,10 @@ flate2 = "1.0.1"
 [dev-dependencies]
 serde_derive = "1"
 
+[features]
+gzip = []
+default = ["gzip"]
+
 [[bin]]
 name = "sysinfo-web"
 test = false
