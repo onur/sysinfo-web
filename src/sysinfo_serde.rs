@@ -76,7 +76,7 @@ impl<'a> Serialize for Ser<'a, Process> {
         // for extra security and save up some bandwith on each request.
         //
         // This is actually breaking whole idea behind this serde serializer,
-        // but I since only sysinfo-web is using this serializer, so it should be fine.
+        // but since only sysinfo-web is using this serializer it should be fine.
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("name", &self.0.name())?;
         //map.serialize_entry("cmd", &self.0.cmd())?;
