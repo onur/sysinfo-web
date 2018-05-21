@@ -7,6 +7,7 @@ extern crate serde_json;
 extern crate serde;
 extern crate iron;
 extern crate hostname;
+extern crate flate2;
 
 pub mod sysinfo_serde;
 mod sysinfo_ext;

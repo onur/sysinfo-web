@@ -2,21 +2,45 @@
 use iron::{Iron, IronResult, Listening, status};
 use iron::error::HttpResult;
 use iron::response::Response;
+#[cfg(feature = "gzip")]
+use iron::response::WriteBody;
 use iron::request::Request;
 use iron::middleware::Handler;
 use iron::mime::Mime;
 
 use sysinfo::{System, SystemExt};
+
+#[cfg(feature = "gzip")]
+use flate2::Compression;
+#[cfg(feature = "gzip")]
+use flate2::write::GzEncoder;
+
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, SystemTime};
+#[cfg(feature = "gzip")]
+use std::io::{self, Write};
+
 use SysinfoExt;
 use serde_json;
 
 
-const INDEX_HTML: &'static str = include_str!("index.html");
+const INDEX_HTML: &'static [u8] = include_bytes!("index.html");
 const FAVICON: &'static [u8] = include_bytes!("../resources/favicon.ico");
 const REFRESH_DELAY: u64 = 60 * 10; // 10 minutes
+
+/// Simple wrapper to get gzip compressed output on string types.
+#[cfg(feature = "gzip")]
+struct GzipContent(Box<WriteBody>);
+
+#[cfg(feature = "gzip")]
+impl WriteBody for GzipContent {
+    fn write_body(&mut self, w: &mut Write) -> io::Result<()> {
+        let mut w = GzEncoder::new(w, Compression::default());
+        self.0.write_body(&mut w)?;
+        w.finish().map(|_| ())
+    }
+}
 
 struct SysinfoIronHandler(Arc<DataHandler>);
 
@@ -38,30 +62,69 @@ impl DataHandler {
     }
 }
 
+#[cfg(feature = "gzip")]
+macro_rules! return_gzip_or_not {
+    ($req:expr, $content:expr, $typ:expr) => {{
+        let mut use_gzip = false;
+
+        if let Some(raw_accept_encoding) = $req.headers.get_raw("accept-encoding") {
+            for accept_encoding in raw_accept_encoding {
+                match ::std::str::from_utf8(accept_encoding).map(|s| s.to_lowercase()) {
+                    Ok(ref s) if s.contains("gzip") => {
+                        use_gzip = true;
+                        break;
+                    }
+                    _ => continue,
+                }
+            }
+        }
+        if !use_gzip {
+            Ok(Response::with((status::Ok, $typ.parse::<Mime>().unwrap(), $content)))
+        } else {
+            use iron::headers::{ContentType, ContentEncoding, Encoding};
+            let mut res = Response::new();
+            res.status = Some(status::Ok);
+            res.body = Some(Box::new(GzipContent(Box::new($content))));
+            res.headers.set(ContentType($typ.parse::<Mime>().unwrap()));
+            res.headers.set(ContentEncoding(vec![Encoding::Gzip]));
+            Ok(res)
+        }
+    }}
+}
+
+#[cfg(not(feature = "gzip"))]
+macro_rules! return_gzip_or_not {
+    ($req:expr, $content:expr, $typ:expr) => {{
+        Ok(Response::with((status::Ok, $typ.parse::<Mime>().unwrap(), $content)))
+    }}
+}
+
 impl Handler for SysinfoIronHandler {
     fn handle(&self, req: &mut Request) -> IronResult<Response> {
-        match req.url.path().last() {
+        match match req.url.path().last() {
             Some(path) => {
                 if *path == "" {
-                    Ok(Response::with((status::Ok,
-                                       "text/html".parse::<Mime>().unwrap(),
-                                       INDEX_HTML)))
+                    1
                 } else if *path == "favicon.ico" {
-                    Ok(Response::with((status::Ok,
-                                       "image/x-icon".parse::<Mime>().unwrap(),
-                                       FAVICON)))
+                    2
                 } else {
-                    self.0.update_last_connection();
-                    Ok(Response::with((status::Ok,
-                                       "application/json".parse::<Mime>().unwrap(),
-                                       self.0.json_output.read().unwrap().clone())))
+                    3
                 }
-            },
-            None => Ok(Response::with((status::NotFound, "Not found")))
+            }
+            None => 0,
+        } {
+            1 => return_gzip_or_not!(req, INDEX_HTML, "text/html"),
+            2 => return_gzip_or_not!(req, FAVICON, "image/x-icon"),
+            3 => {
+                self.0.update_last_connection();
+                return_gzip_or_not!(req,
+                                    self.0.json_output.read().unwrap().clone(),
+                                    "application/json")
+            }
+            _ => Ok(Response::with((status::NotFound, "Not found"))),
         }
     }
 }
-
 
 pub fn start_web_server(sock_addr: Option<String>) -> HttpResult<Listening> {
     let data_handler = Arc::new(DataHandler {
