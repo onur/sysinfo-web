@@ -81,11 +81,12 @@ macro_rules! return_gzip_or_not {
         if !use_gzip {
             Ok(Response::with((status::Ok, $typ.parse::<Mime>().unwrap(), $content)))
         } else {
+            use iron::headers::{ContentType, ContentEncoding, Encoding};
             let mut res = Response::new();
             res.status = Some(status::Ok);
             res.body = Some(Box::new(GzipContent(Box::new($content))));
-            res.headers.append_raw("content-type", $typ.as_bytes().to_vec());
-            res.headers.append_raw("content-encoding", vec![b'g', b'z', b'i', b'p']);
+            res.headers.set(ContentType($typ.parse::<Mime>().unwrap()));
+            res.headers.set(ContentEncoding(vec![Encoding::Gzip]));
             Ok(res)
         }
     }}
