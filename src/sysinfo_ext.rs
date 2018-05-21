@@ -23,25 +23,7 @@ impl<'a> SysinfoExt<'a> {
     pub fn new(system: &'a System) -> Self {
         let network = system.get_network();
         SysinfoExt {
-            process_list: system.get_process_list()
-                .iter()
-                // filter unnamed kernel threads
-                .filter(|p| !p.1.name.is_empty())
-                .map(|p| {
-                    (*p.0,
-                     {
-                         let mut t = p.1.clone();
-                         // clear tasks to save up some space
-                         #[cfg(target_os = "linux")]
-                         t.tasks.clear();
-                         // clear environment variables
-                         t.environ.clear();
-                         // clear command line arguments
-                         t.cmd.clear();
-                         t
-                    })
-                })
-                .collect(),
+            process_list: system.get_process_list().to_owned(),
             processor_list: system.get_processor_list(),
             components_list: system.get_components_list(),
             disks: system.get_disks(),

@@ -13,14 +13,14 @@ serde = "1"
 serde_json = "1"
 iron = "0.6"
 hostname = "0.1"
-sysinfo = "0.3"
-flate2 = "1.0.1"
+sysinfo = "0.5"
+flate2 = { version = "1.0.1", optional = true }
 
 [dev-dependencies]
 serde_derive = "1"
 
 [features]
-gzip = []
+gzip = ["flate2"]
 default = ["gzip"]
 
 [[bin]]
