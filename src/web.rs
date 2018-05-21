@@ -15,6 +15,7 @@ use serde_json;
 
 
 const INDEX_HTML: &'static str = include_str!("index.html");
+const FAVICON: &'static [u8] = include_bytes!("../resources/favicon.ico");
 const REFRESH_DELAY: u64 = 60 * 10; // 10 minutes
 
 struct SysinfoIronHandler(Arc<DataHandler>);
@@ -45,6 +46,10 @@ impl Handler for SysinfoIronHandler {
                     Ok(Response::with((status::Ok,
                                        "text/html".parse::<Mime>().unwrap(),
                                        INDEX_HTML)))
+                } else if *path == "favicon.ico" {
+                    Ok(Response::with((status::Ok,
+                                       "image/x-icon".parse::<Mime>().unwrap(),
+                                       FAVICON)))
                 } else {
                     self.0.update_last_connection();
                     Ok(Response::with((status::Ok,
