@@ -30,8 +30,8 @@
 use std::collections::HashMap;
 use serde::{Serialize, Serializer};
 use serde::ser::SerializeMap;
-use sysinfo::{System, SystemExt, Processor, ProcessorExt, Process, Component, Disk, DiskExt,
-              DiskType};
+use sysinfo::{System, SystemExt, Processor, ProcessorExt, Process, ProcessExt,
+              Component, ComponentExt, Disk, DiskExt, DiskType};
 
 
 pub fn serialize<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
@@ -72,18 +72,23 @@ impl<'a> Serialize for Ser<'a, Process> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where S: Serializer
     {
+        // Do not serialize command line arguments and environment variables
+        // for extra security and save up some bandwith on each request.
+        //
+        // This is actually breaking whole idea behind this serde serializer,
+        // but I since only sysinfo-web is using this serializer, so it should be fine.
         let mut map = serializer.serialize_map(None)?;
-        map.serialize_entry("name", &self.0.name)?;
-        map.serialize_entry("cmd", &self.0.cmd)?;
-        map.serialize_entry("exe", &self.0.exe)?;
-        map.serialize_entry("pid", &self.0.pid)?;
-        map.serialize_entry("parent", &self.0.parent)?;
-        map.serialize_entry("environ", &self.0.environ)?;
-        map.serialize_entry("cwd", &self.0.cwd)?;
-        map.serialize_entry("root", &self.0.root)?;
-        map.serialize_entry("memory", &self.0.memory)?;
-        map.serialize_entry("start_time", &self.0.start_time)?;
-        map.serialize_entry("cpu_usage", &self.0.cpu_usage)?;
+        map.serialize_entry("name", &self.0.name())?;
+        //map.serialize_entry("cmd", &self.0.cmd())?;
+        map.serialize_entry("exe", &self.0.exe())?;
+        map.serialize_entry("pid", &self.0.pid())?;
+        map.serialize_entry("parent", &self.0.parent())?;
+        //map.serialize_entry("environ", &self.0.environ())?;
+        map.serialize_entry("cwd", &self.0.cwd())?;
+        map.serialize_entry("root", &self.0.root())?;
+        map.serialize_entry("memory", &self.0.memory())?;
+        map.serialize_entry("start_time", &self.0.start_time())?;
+        map.serialize_entry("cpu_usage", &self.0.cpu_usage())?;
         map.serialize_entry("uid", &self.0.uid)?;
         map.serialize_entry("gid", &self.0.gid)?;
         #[cfg(target_os = "linux")]
@@ -112,10 +117,10 @@ impl<'a> Serialize for Ser<'a, Component> {
         where S: Serializer
     {
         let mut map = serializer.serialize_map(None)?;
-        map.serialize_entry("temperature", &self.0.temperature)?;
-        map.serialize_entry("max", &self.0.max)?;
-        map.serialize_entry("critical", &self.0.critical)?;
-        map.serialize_entry("label", &self.0.label)?;
+        map.serialize_entry("temperature", &self.0.get_temperature())?;
+        map.serialize_entry("max", &self.0.get_max())?;
+        map.serialize_entry("critical", &self.0.get_critical())?;
+        map.serialize_entry("label", &self.0.get_label())?;
         map.end()
     }
 }
