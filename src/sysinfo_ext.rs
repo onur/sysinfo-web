@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 use std::io::Error;
 use serde::{Serialize, Serializer};
-use sysinfo::{NetworkExt, System, SystemExt, Disk, Process, Component, Processor};
+use sysinfo::{NetworkExt, System, SystemExt, Disk, Process, ProcessExt, Component, Processor};
 use hostname::get_hostname;
 
 
@@ -23,7 +23,11 @@ impl<'a> SysinfoExt<'a> {
     pub fn new(system: &'a System) -> Self {
         let network = system.get_network();
         SysinfoExt {
-            process_list: system.get_process_list().to_owned(),
+            process_list: system.get_process_list()
+                // filter unnamed kernel threads
+                .iter().filter(|p| !p.1.name().is_empty())
+                .map(|p| (*p.0, p.1.clone()))
+                .collect(),
             processor_list: system.get_processor_list(),
             components_list: system.get_components_list(),
             disks: system.get_disks(),
