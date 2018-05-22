@@ -411,7 +411,7 @@ dependencies = [
 
 [[package]]
 name = "sysinfo-web"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "flate2 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hostname 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
