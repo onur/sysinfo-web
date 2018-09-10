@@ -222,7 +222,7 @@ div.memory-pie-chart-container {
         <div class="col-xs-12">
             <div class="panel panel-default">
                 <div class="panel-body">
-                    <input placeholder="Filter by name or pid" v-model="procFilter" class="i-filter">
+                    <input placeholder="Filter by Name, PID, UID or GID" v-model="procFilter" class="i-filter">
                     <table class="table table-striped table-hover">
                         <thead>
                             <tr>
@@ -526,7 +526,9 @@ var sysinfo = new Vue({
             return this.sysinfo.process_list.filter(function(a) {
                 return filter.length === 0 ||
                        (a['pid'] + '').indexOf(filter) !== -1 ||
-                       a['name'].toLowerCase().indexOf(filter) !== -1;
+                       a['name'].toLowerCase().indexOf(filter) !== -1 ||
+                       (a['uid'] + '').indexOf(filter) !== -1 ||
+                       (a['gid'] + '').indexOf(filter) !== -1;
             }).sort(function(a, b) {
                 a = a[self.sortKey];
                 b = b[self.sortKey];
