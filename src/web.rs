@@ -162,5 +162,9 @@ pub fn start_web_server(sock_addr: Option<String>) -> HttpResult<Listening> {
     });
     let mut iron = Iron::new(SysinfoIronHandler(data_handler));
     iron.threads = 4;
-    iron.http(sock_addr.unwrap_or("localhost:3000".to_owned()))
+    let ret = iron.http(sock_addr.unwrap_or("localhost:3000".to_owned()));
+    if ret.is_ok() {
+        println!("Started server on port 3000");
+    }
+    ret
 }
