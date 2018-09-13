@@ -9,6 +9,7 @@ extern crate iron;
 extern crate hostname;
 #[cfg(feature = "gzip")]
 extern crate flate2;
+extern crate warp;
 
 pub mod sysinfo_serde;
 mod sysinfo_ext;
