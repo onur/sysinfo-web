@@ -5,7 +5,6 @@
 pub extern crate sysinfo;
 extern crate serde_json;
 extern crate serde;
-extern crate iron;
 extern crate hostname;
 #[cfg(feature = "gzip")]
 extern crate flate2;

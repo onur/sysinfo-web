@@ -1,13 +1,3 @@
-
-use iron::{Iron, IronResult, Listening, status};
-use iron::error::HttpResult;
-use iron::response::Response;
-#[cfg(feature = "gzip")]
-use iron::response::WriteBody;
-use iron::request::Request;
-use iron::middleware::Handler;
-use iron::mime::Mime;
-
 use sysinfo::{System, SystemExt};
 
 #[cfg(feature = "gzip")]
@@ -15,16 +5,20 @@ use flate2::Compression;
 #[cfg(feature = "gzip")]
 use flate2::write::GzEncoder;
 
+use std::io::BufReader;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, SystemTime};
 #[cfg(feature = "gzip")]
 use std::io::{self, Write};
+use std::io::prelude::*;
 
 use SysinfoExt;
 use serde_json;
 
-use warp::Filter;
+use warp::{self, Filter, reject, Rejection, Reply};
+use warp::http::{Response, StatusCode};
 
 const INDEX_HTML: &'static [u8] = include_bytes!("index.html");
 const FAVICON: &'static [u8] = include_bytes!("../resources/favicon.ico");
@@ -93,7 +87,7 @@ macro_rules! return_gzip_or_not {
         if let Some(raw_accept_encoding) = $req.headers.get_raw("accept-encoding") {
             for accept_encoding in raw_accept_encoding {
                 match ::std::str::from_utf8(accept_encoding).map(|s| s.to_lowercase()) {
-                    Ok(ref s) if s.contains("gzip") => {
+                    Ok(ref s) if s.contains("gzip") || s.contains("*") => {
                         use_gzip = true;
                         break;
                     }
@@ -102,15 +96,33 @@ macro_rules! return_gzip_or_not {
             }
         }
         if !use_gzip {
-            Ok(Response::with((status::Ok, $typ.parse::<Mime>().unwrap(), $content)))
+            Response::builder()
+                     .header("content-type", $typ)
+                     .body($content)
         } else {
-            use iron::headers::{ContentType, ContentEncoding, Encoding};
+            /*use iron::headers::{ContentType, ContentEncoding, Encoding};
             let mut res = Response::new();
             res.status = Some(status::Ok);
             res.body = Some(Box::new(GzipContent(Box::new($content))));
             res.headers.set(ContentType($typ.parse::<Mime>().unwrap()));
             res.headers.set(ContentEncoding(vec![Encoding::Gzip]));
-            Ok(res)
+            Ok(res)*/
+            let b = BufReader::new($content);
+            let mut gz = GzEncoder::new(b, Compression::fast());
+            let mut buffer = Vec::new();
+            gz.read_to_end(&mut buffer)
+              .map(|_| {
+                  Response::builder()
+                           .header("content-type", $typ)
+                           .header("content-encoding", "gzip")
+                           .body(buffer)
+              })
+              .map_err(|e| {
+                  eprintln!("Error in gzip compression: {}", e);
+                  Response::builder()
+                           .header("content-type", $typ)
+                           .body($content)
+              })
         }
     }}
 }
@@ -207,14 +219,14 @@ pub fn start_web_server(sock_addr: Option<String>) -> Result<(), ()> {
     });
     let update = warp::path("sysinfo.json").map(|| {
         data_handler.update_last_connection();
-        return_gzip_or_not!(req, data_handler.json_output.read().unwrap().clone(), "application/json")
+        return_gzip_or_not!(req, data_handler.json_output.read().unwrap().clone().as_bytes(), "application/json")
     });
     let index = warp::path("").map(|| {
         return_gzip_or_not!(req, INDEX_HTML, "text/html")
     });
 
     let routes = warp::get2().and(index.or(update).or(index).recover(customize_error));
-    let addr = match sock_addr {
+    /*let addr = match sock_addr {
         Some(s) => s.split(":")
                     .next()
                     .unwrap_or_else(|| "")
@@ -226,7 +238,7 @@ pub fn start_web_server(sock_addr: Option<String>) -> Result<(), ()> {
     if addr.len() != 4 {
         eprintln!("Invalid socket address received");
         return Err(())
-    }
-    warp::serve(routes).run(&addr);
+    }*/
+    warp::serve(routes).run(sock_addr.unwrap_or_else(|| "127.0.0.1".to_owned()));
     Ok(())
 }
