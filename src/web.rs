@@ -80,57 +80,55 @@ impl DataHandler {
 }
 
 #[cfg(feature = "gzip")]
-macro_rules! return_gzip_or_not {
-    ($req:expr, $content:expr, $typ:expr) => {{
-        let mut use_gzip = false;
+macro_rules! return_gzip_err {
+    ($content:expr, $typ:expr, $err:expr) => {{
+        eprintln!("Error in gzip compression: {}", $err);
+        return Response::builder()
+                        .header("content-type", $typ)
+                        .body($content.to_owned())
+    }}
+}
 
-        if let Some(raw_accept_encoding) = $req.headers.get_raw("accept-encoding") {
-            for accept_encoding in raw_accept_encoding {
-                match ::std::str::from_utf8(accept_encoding).map(|s| s.to_lowercase()) {
-                    Ok(ref s) if s.contains("gzip") || s.contains("*") => {
-                        use_gzip = true;
-                        break;
-                    }
-                    _ => continue,
-                }
-            }
-        }
-        if !use_gzip {
-            Response::builder()
-                     .header("content-type", $typ)
-                     .body($content)
-        } else {
-            /*use iron::headers::{ContentType, ContentEncoding, Encoding};
-            let mut res = Response::new();
-            res.status = Some(status::Ok);
-            res.body = Some(Box::new(GzipContent(Box::new($content))));
-            res.headers.set(ContentType($typ.parse::<Mime>().unwrap()));
-            res.headers.set(ContentEncoding(vec![Encoding::Gzip]));
-            Ok(res)*/
-            let b = BufReader::new($content);
-            let mut gz = GzEncoder::new(b, Compression::fast());
-            let mut buffer = Vec::new();
-            gz.read_to_end(&mut buffer)
-              .map(|_| {
-                  Response::builder()
-                           .header("content-type", $typ)
-                           .header("content-encoding", "gzip")
-                           .body(buffer)
-              })
-              .map_err(|e| {
-                  eprintln!("Error in gzip compression: {}", e);
-                  Response::builder()
-                           .header("content-type", $typ)
-                           .body($content)
-              })
-        }
+#[cfg(feature = "gzip")]
+macro_rules! return_gzip_or_not {
+    ($content:expr, $typ:expr) => {{
+        warp::header::<String>("accept-encoding")
+                     .and_then(|encoding: String| {
+                         let s = encoding.to_lowercase();
+                         if s.contains("gzip") || s.contains("*") {
+                             let b = BufReader::new($content);
+                             let mut gz = GzEncoder::new(Vec::new(), Compression::fast());
+                             if gz.write_all($content).is_err() {
+                                return_gzip_err!($content, $typ, "write_all failed")
+                             }
+                             if let Ok(buffer) = gz.finish() {
+                                Response::builder()
+                                         .header("content-type", $typ)
+                                         .header("content-encoding", "gzip")
+                                         .body(buffer.to_owned())
+                             } else {
+                                return_gzip_err!($content, $typ, "finish failed")
+                             }
+                         } else {
+                             Response::builder()
+                                      .header("content-type", $typ)
+                                      .body($content.to_owned())
+                         }
+                     })
+                     .or_else(|| {
+                         Response::builder()
+                                  .header("content-type", $typ)
+                                  .body($content.to_owned())
+                     })
     }}
 }
 
 #[cfg(not(feature = "gzip"))]
 macro_rules! return_gzip_or_not {
-    ($req:expr, $content:expr, $typ:expr) => {{
-        Ok(Response::with((status::Ok, $typ.parse::<Mime>().unwrap(), $content)))
+    ($content:expr, $typ:expr) => {{
+        Response::builder()
+                 .header("content-type", $typ)
+                 .body($content)
     }}
 }
 
@@ -203,7 +201,7 @@ pub fn start_web_server(sock_addr: Option<String>) -> Result<(), ()> {
                     json_output.clear();
                     use std::fmt::Write;
                     json_output.write_str(&serde_json::to_string(&sysinfo)
-                                          .unwrap_or(String::from("[]"))).unwrap();
+                                          .unwrap_or_else(|_| "[]".to_string())).unwrap();
                 }
                 thread::sleep(Duration::new(5, 0));
             } else {
@@ -215,14 +213,14 @@ pub fn start_web_server(sock_addr: Option<String>) -> Result<(), ()> {
     });
 
     let index = warp::path("favicon.ico").map(|| {
-        return_gzip_or_not!(req, FAVICON, "image/x-icon")
+        return_gzip_or_not!(FAVICON, "image/x-icon")
     });
     let update = warp::path("sysinfo.json").map(|| {
         data_handler.update_last_connection();
-        return_gzip_or_not!(req, data_handler.json_output.read().unwrap().clone().as_bytes(), "application/json")
+        return_gzip_or_not!(data_handler.json_output.read().unwrap().clone().as_bytes(), "application/json")
     });
     let index = warp::path("").map(|| {
-        return_gzip_or_not!(req, INDEX_HTML, "text/html")
+        return_gzip_or_not!(INDEX_HTML, "text/html")
     });
 
     let routes = warp::get2().and(index.or(update).or(index).recover(customize_error));
