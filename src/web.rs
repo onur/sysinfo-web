@@ -93,7 +93,7 @@ macro_rules! return_gzip_err {
 macro_rules! return_gzip_or_not {
     ($content:expr, $typ:expr) => {{
         warp::header::<String>("accept-encoding")
-                     .and_then(|encoding: String| {
+                     .map(|encoding: String| {
                          let s = encoding.to_lowercase();
                          if s.contains("gzip") || s.contains("*") {
                              let b = BufReader::new($content);
@@ -115,11 +115,11 @@ macro_rules! return_gzip_or_not {
                                       .body($content.to_owned())
                          }
                      })
-                     .or_else(|| {
-                         Response::builder()
+                     /*.recover(|_| {
+                         Ok(Response::builder()
                                   .header("content-type", $typ)
-                                  .body($content.to_owned())
-                     })
+                                  .body($content.to_owned()))
+                     })*/
     }}
 }
 
@@ -201,7 +201,7 @@ pub fn start_web_server(sock_addr: Option<String>) -> Result<(), ()> {
                     json_output.clear();
                     use std::fmt::Write;
                     json_output.write_str(&serde_json::to_string(&sysinfo)
-                                          .unwrap_or_else(|_| "[]".to_string())).unwrap();
+                               .unwrap_or_else(|_| "[]".to_string())).unwrap();
                 }
                 thread::sleep(Duration::new(5, 0));
             } else {
@@ -219,11 +219,11 @@ pub fn start_web_server(sock_addr: Option<String>) -> Result<(), ()> {
         data_handler.update_last_connection();
         return_gzip_or_not!(data_handler.json_output.read().unwrap().clone().as_bytes(), "application/json")
     });
-    let index = warp::path("").map(|| {
+    let index2 = warp::path("").map(|| {
         return_gzip_or_not!(INDEX_HTML, "text/html")
     });
 
-    let routes = warp::get2().and(index.or(update).or(index).recover(customize_error));
+    let routes = warp::get2().and(index/*.or(update).or(index2)*/).recover(customize_error);
     /*let addr = match sock_addr {
         Some(s) => s.split(":")
                     .next()
