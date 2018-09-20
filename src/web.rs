@@ -91,35 +91,32 @@ macro_rules! return_gzip_err {
 
 #[cfg(feature = "gzip")]
 macro_rules! return_gzip_or_not {
-    ($content:expr, $typ:expr) => {{
-        warp::header::<String>("accept-encoding")
-                     .map(|encoding: String| {
-                         let s = encoding.to_lowercase();
-                         if s.contains("gzip") || s.contains("*") {
-                             let b = BufReader::new($content);
-                             let mut gz = GzEncoder::new(Vec::new(), Compression::fast());
-                             if gz.write_all($content).is_err() {
-                                return_gzip_err!($content, $typ, "write_all failed")
-                             }
-                             if let Ok(buffer) = gz.finish() {
-                                Response::builder()
-                                         .header("content-type", $typ)
-                                         .header("content-encoding", "gzip")
-                                         .body(buffer.to_owned())
-                             } else {
-                                return_gzip_err!($content, $typ, "finish failed")
-                             }
-                         } else {
-                             Response::builder()
-                                      .header("content-type", $typ)
-                                      .body($content.to_owned())
-                         }
-                     })
-                     /*.recover(|_| {
-                         Ok(Response::builder()
-                                  .header("content-type", $typ)
-                                  .body($content.to_owned()))
-                     })*/
+    ($encoding:expr, $content:expr, $typ:expr) => {{
+         let s = $encoding.to_lowercase();
+         if s.contains("gzip") || s.contains("*") {
+             //let b = BufReader::new($content);
+             let mut gz = GzEncoder::new(Vec::new(), Compression::fast());
+             if gz.write_all($content).is_err() {
+                return_gzip_err!($content, $typ, "write_all failed")
+             }
+             if let Ok(buffer) = gz.finish() {
+                Response::builder()
+                         .header("content-type", $typ)
+                         .header("content-encoding", "gzip")
+                         .body(buffer.to_owned())
+             } else {
+                return_gzip_err!($content, $typ, "finish failed")
+             }
+         } else {
+             Response::builder()
+                      .header("content-type", $typ)
+                      .body($content.to_owned())
+         }
+         /*.recover(|_| {
+             Ok(Response::builder()
+                      .header("content-type", $typ)
+                      .body($content.to_owned()))
+         })*/
     }}
 }
 
@@ -212,18 +209,27 @@ pub fn start_web_server(sock_addr: Option<String>) -> Result<(), ()> {
         }
     });
 
-    let index = warp::path("favicon.ico").map(|| {
-        return_gzip_or_not!(FAVICON, "image/x-icon")
+    let index = warp::path("favicon.ico")
+                     .and(warp::header::<String>("accept-encoding"))
+                     .map(|encoding: String| {
+        return_gzip_or_not!(encoding, FAVICON, "image/x-icon")
     });
-    let update = warp::path("sysinfo.json").map(|| {
+    let update = warp::path("sysinfo.json")
+                     .and(warp::header::<String>("accept-encoding"))
+                     .map(move |encoding: String| {
         data_handler.update_last_connection();
-        return_gzip_or_not!(data_handler.json_output.read().unwrap().clone().as_bytes(), "application/json")
+        let x = data_handler.json_output.read().unwrap().clone().as_bytes().to_owned();
+        return_gzip_or_not!(encoding,
+                            x.as_slice(),
+                            "application/json")
     });
-    let index2 = warp::path("").map(|| {
-        return_gzip_or_not!(INDEX_HTML, "text/html")
+    let index2 = warp::index()
+                     .and(warp::header::<String>("accept-encoding"))
+                     .map(|encoding: String| {
+        return_gzip_or_not!(encoding, INDEX_HTML, "text/html")
     });
 
-    let routes = warp::get2().and(index/*.or(update).or(index2)*/).recover(customize_error);
+    let routes = warp::get2().and(index.or(update).or(index2)).recover(customize_error);
     /*let addr = match sock_addr {
         Some(s) => s.split(":")
                     .next()
@@ -237,6 +243,6 @@ pub fn start_web_server(sock_addr: Option<String>) -> Result<(), ()> {
         eprintln!("Invalid socket address received");
         return Err(())
     }*/
-    warp::serve(routes).run(sock_addr.unwrap_or_else(|| "127.0.0.1".to_owned()));
+    warp::serve(routes).run(([127, 0, 0, 1], 4321));
     Ok(())
 }
