@@ -5,61 +5,22 @@ use flate2::Compression;
 #[cfg(feature = "gzip")]
 use flate2::write::GzEncoder;
 
-use std::io::BufReader;
-use std::str::FromStr;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, SystemTime};
 #[cfg(feature = "gzip")]
-use std::io::{self, Write};
-use std::io::prelude::*;
+use std::io::Write;
+use std::net::SocketAddr;
 
 use SysinfoExt;
 use serde_json;
 
-use warp::{self, Filter, reject, Rejection, Reply};
+use warp::{self, Filter, Rejection, Reply};
 use warp::http::{Response, StatusCode};
 
 const INDEX_HTML: &'static [u8] = include_bytes!("index.html");
 const FAVICON: &'static [u8] = include_bytes!("../resources/favicon.ico");
 const REFRESH_DELAY: u64 = 60 * 10; // 10 minutes
-/*
-/// Simple wrapper to get gzip compressed output on string types.
-#[cfg(feature = "gzip")]
-pub struct Gzip;
-
-#[cfg(feature = "gzip")]
-impl fairing::Fairing for Gzip {
-    fn info(&self) -> fairing::Info {
-        fairing::Info {
-            name: "Gzip compression",
-            kind: fairing::Kind::Response,
-        }
-    }
-
-    fn on_response(&self, request: &Request, response: &mut Response) {
-        use flate2::{Compression, FlateReadExt};
-        use std::io::{Cursor, Read};
-        let headers = request.headers();
-        if headers
-            .get("Accept-Encoding")
-            .any(|e| e.to_lowercase().contains("gzip"))
-        {
-            response.body_bytes().and_then(|body| {
-                let mut enc = body.gz_encode(Compression::Default);
-                let mut buf = Vec::with_capacity(body.len());
-                enc.read_to_end(&mut buf)
-                    .map(|_| {
-                        response.set_sized_body(Cursor::new(buf));
-                        response.set_raw_header("Content-Encoding", "gzip");
-                    })
-                    .map_err(|e| eprintln!("{}", e)).ok()
-            });
-        }
-    }
-}
-
-struct SysinfoIronHandler(Arc<DataHandler>);*/
 
 struct DataHandler {
     system: RwLock<System>,
@@ -94,7 +55,6 @@ macro_rules! return_gzip_or_not {
     ($encoding:expr, $content:expr, $typ:expr) => {{
          let s = $encoding.to_lowercase();
          if s.contains("gzip") || s.contains("*") {
-             //let b = BufReader::new($content);
              let mut gz = GzEncoder::new(Vec::new(), Compression::fast());
              if gz.write_all($content).is_err() {
                 return_gzip_err!($content, $typ, "write_all failed")
@@ -112,49 +72,17 @@ macro_rules! return_gzip_or_not {
                       .header("content-type", $typ)
                       .body($content.to_owned())
          }
-         /*.recover(|_| {
-             Ok(Response::builder()
-                      .header("content-type", $typ)
-                      .body($content.to_owned()))
-         })*/
     }}
 }
 
 #[cfg(not(feature = "gzip"))]
 macro_rules! return_gzip_or_not {
-    ($content:expr, $typ:expr) => {{
+    ($encoding:expr, $content:expr, $typ:expr) => {{
         Response::builder()
                  .header("content-type", $typ)
-                 .body($content)
+                 .body($content.to_owned())
     }}
 }
-
-/*impl Handler for SysinfoIronHandler {
-    fn handle(&self, req: &mut Request) -> IronResult<Response> {
-        match match req.url.path().last() {
-            Some(path) => {
-                if *path == "" {
-                    1
-                } else if *path == "favicon.ico" {
-                    2
-                } else {
-                    3
-                }
-            }
-            None => 0,
-        } {
-            1 => return_gzip_or_not!(req, INDEX_HTML, "text/html"),
-            2 => return_gzip_or_not!(req, FAVICON, "image/x-icon"),
-            3 => {
-                self.0.update_last_connection();
-                return_gzip_or_not!(req,
-                                    self.0.json_output.read().unwrap().clone(),
-                                    "application/json")
-            }
-            _ => Ok(Response::with((status::NotFound, "Not found"))),
-        }
-    }
-}*/
 
 fn customize_error(err: Rejection) -> Result<impl Reply, Rejection> {
     match err.status() {
@@ -211,38 +139,41 @@ pub fn start_web_server(sock_addr: Option<String>) -> Result<(), ()> {
 
     let index = warp::path("favicon.ico")
                      .and(warp::header::<String>("accept-encoding"))
-                     .map(|encoding: String| {
-        return_gzip_or_not!(encoding, FAVICON, "image/x-icon")
+                     .map(|_encoding: String| {
+        return_gzip_or_not!(_encoding, FAVICON, "image/x-icon")
     });
     let update = warp::path("sysinfo.json")
                      .and(warp::header::<String>("accept-encoding"))
-                     .map(move |encoding: String| {
+                     .map(move |_encoding: String| {
         data_handler.update_last_connection();
         let x = data_handler.json_output.read().unwrap().clone().as_bytes().to_owned();
-        return_gzip_or_not!(encoding,
+        return_gzip_or_not!(_encoding,
                             x.as_slice(),
                             "application/json")
     });
     let index2 = warp::index()
                      .and(warp::header::<String>("accept-encoding"))
-                     .map(|encoding: String| {
-        return_gzip_or_not!(encoding, INDEX_HTML, "text/html")
+                     .map(|_encoding: String| {
+        return_gzip_or_not!(_encoding, INDEX_HTML, "text/html")
     });
 
     let routes = warp::get2().and(index.or(update).or(index2)).recover(customize_error);
-    /*let addr = match sock_addr {
-        Some(s) => s.split(":")
-                    .next()
-                    .unwrap_or_else(|| "")
-                    .split(".")
-                    .filter_map(|s| u32::from_str(s).ok())
-                    .collect::<Vec<_>>(),
-        None => vec![127, 0, 0, 1],
-    };
-    if addr.len() != 4 {
-        eprintln!("Invalid socket address received");
-        return Err(())
-    }*/
-    warp::serve(routes).run(([127, 0, 0, 1], 4321));
+
+    match sock_addr {
+        Some(s) => {
+            let addr: SocketAddr = match s.parse() {
+                Ok(a) => a,
+                Err(e) => {
+                    println!("Invalid IP address: {:?}", e);
+                    return Err(());
+                }
+            };
+            warp::serve(routes).run(addr);
+        }
+        None => {
+            println!("Starting on 127.0.0.1:4321");
+            warp::serve(routes).run(([127, 0, 0, 1], 4321));
+        }
+    }
     Ok(())
 }
