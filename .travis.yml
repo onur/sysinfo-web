@@ -18,4 +18,5 @@ env:
 script:
   - rustc --version
   - RUST_BACKTRACE=1 cargo build
+  - RUST_BACKTRACE=1 cargo build --no-default-features
   - RUST_BACKTRACE=1 cargo test
