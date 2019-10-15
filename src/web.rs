@@ -1,13 +1,3 @@
-
-use iron::{Iron, IronResult, Listening, status};
-use iron::error::HttpResult;
-use iron::response::Response;
-#[cfg(feature = "gzip")]
-use iron::response::WriteBody;
-use iron::request::Request;
-use iron::middleware::Handler;
-use iron::mime::Mime;
-
 use sysinfo::{System, SystemExt};
 
 #[cfg(feature = "gzip")]
@@ -19,30 +9,18 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, SystemTime};
 #[cfg(feature = "gzip")]
-use std::io::{self, Write};
+use std::io::Write;
+use std::net::SocketAddr;
 
 use SysinfoExt;
 use serde_json;
 
+use warp::{self, Filter, Rejection, Reply};
+use warp::http::{Response, StatusCode};
 
 const INDEX_HTML: &'static [u8] = include_bytes!("index.html");
 const FAVICON: &'static [u8] = include_bytes!("../resources/favicon.ico");
 const REFRESH_DELAY: u64 = 60 * 10; // 10 minutes
-
-/// Simple wrapper to get gzip compressed output on string types.
-#[cfg(feature = "gzip")]
-struct GzipContent(Box<WriteBody>);
-
-#[cfg(feature = "gzip")]
-impl WriteBody for GzipContent {
-    fn write_body(&mut self, w: &mut Write) -> io::Result<()> {
-        let mut w = GzEncoder::new(w, Compression::default());
-        self.0.write_body(&mut w)?;
-        w.finish().map(|_| ())
-    }
-}
-
-struct SysinfoIronHandler(Arc<DataHandler>);
 
 struct DataHandler {
     system: RwLock<System>,
@@ -63,70 +41,68 @@ impl DataHandler {
 }
 
 #[cfg(feature = "gzip")]
-macro_rules! return_gzip_or_not {
-    ($req:expr, $content:expr, $typ:expr) => {{
-        let mut use_gzip = false;
+macro_rules! return_gzip_err {
+    ($content:expr, $typ:expr, $err:expr) => {{
+        eprintln!("Error in gzip compression: {}", $err);
+        return Response::builder()
+                        .header("content-type", $typ)
+                        .body($content.to_owned())
+    }}
+}
 
-        if let Some(raw_accept_encoding) = $req.headers.get_raw("accept-encoding") {
-            for accept_encoding in raw_accept_encoding {
-                match ::std::str::from_utf8(accept_encoding).map(|s| s.to_lowercase()) {
-                    Ok(ref s) if s.contains("gzip") => {
-                        use_gzip = true;
-                        break;
-                    }
-                    _ => continue,
-                }
-            }
-        }
-        if !use_gzip {
-            Ok(Response::with((status::Ok, $typ.parse::<Mime>().unwrap(), $content)))
-        } else {
-            use iron::headers::{ContentType, ContentEncoding, Encoding};
-            let mut res = Response::new();
-            res.status = Some(status::Ok);
-            res.body = Some(Box::new(GzipContent(Box::new($content))));
-            res.headers.set(ContentType($typ.parse::<Mime>().unwrap()));
-            res.headers.set(ContentEncoding(vec![Encoding::Gzip]));
-            Ok(res)
-        }
+#[cfg(feature = "gzip")]
+macro_rules! return_gzip_or_not {
+    ($encoding:expr, $content:expr, $typ:expr) => {{
+         let s = $encoding.to_lowercase();
+         if s.contains("gzip") || s.contains("*") {
+             let mut gz = GzEncoder::new(Vec::new(), Compression::fast());
+             if gz.write_all($content).is_err() {
+                return_gzip_err!($content, $typ, "write_all failed")
+             }
+             if let Ok(buffer) = gz.finish() {
+                Response::builder()
+                         .header("content-type", $typ)
+                         .header("content-encoding", "gzip")
+                         .body(buffer.to_owned())
+             } else {
+                return_gzip_err!($content, $typ, "finish failed")
+             }
+         } else {
+             Response::builder()
+                      .header("content-type", $typ)
+                      .body($content.to_owned())
+         }
     }}
 }
 
 #[cfg(not(feature = "gzip"))]
 macro_rules! return_gzip_or_not {
-    ($req:expr, $content:expr, $typ:expr) => {{
-        Ok(Response::with((status::Ok, $typ.parse::<Mime>().unwrap(), $content)))
+    ($encoding:expr, $content:expr, $typ:expr) => {{
+        Response::builder()
+                 .header("content-type", $typ)
+                 .body($content.to_owned())
     }}
 }
 
-impl Handler for SysinfoIronHandler {
-    fn handle(&self, req: &mut Request) -> IronResult<Response> {
-        match match req.url.path().last() {
-            Some(path) => {
-                if *path == "" {
-                    1
-                } else if *path == "favicon.ico" {
-                    2
-                } else {
-                    3
-                }
-            }
-            None => 0,
-        } {
-            1 => return_gzip_or_not!(req, INDEX_HTML, "text/html"),
-            2 => return_gzip_or_not!(req, FAVICON, "image/x-icon"),
-            3 => {
-                self.0.update_last_connection();
-                return_gzip_or_not!(req,
-                                    self.0.json_output.read().unwrap().clone(),
-                                    "application/json")
-            }
-            _ => Ok(Response::with((status::NotFound, "Not found"))),
+fn customize_error(err: Rejection) -> Result<impl Reply, Rejection> {
+    match err.status() {
+        StatusCode::NOT_FOUND => {
+            Ok(Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body("you get a 404, and *you* get a 404..."))
+        },
+        StatusCode::INTERNAL_SERVER_ERROR => {
+            Ok(Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(":fire: this is fine"))
+        }
+        _ => {
+            Err(err)
         }
     }
 }
 
-pub fn start_web_server(sock_addr: Option<String>) -> HttpResult<Listening> {
+pub fn start_web_server(sock_addr: Option<String>) -> Result<(), ()> {
     let data_handler = Arc::new(DataHandler {
         system: RwLock::new(System::new()),
         last_connection: Mutex::new(SystemTime::now()),
@@ -150,7 +126,7 @@ pub fn start_web_server(sock_addr: Option<String>) -> HttpResult<Listening> {
                     json_output.clear();
                     use std::fmt::Write;
                     json_output.write_str(&serde_json::to_string(&sysinfo)
-                                          .unwrap_or(String::from("[]"))).unwrap();
+                               .unwrap_or_else(|_| "[]".to_string())).unwrap();
                 }
                 thread::sleep(Duration::new(5, 0));
             } else {
@@ -160,11 +136,44 @@ pub fn start_web_server(sock_addr: Option<String>) -> HttpResult<Listening> {
             }
         }
     });
-    let mut iron = Iron::new(SysinfoIronHandler(data_handler));
-    iron.threads = 4;
-    let ret = iron.http(sock_addr.unwrap_or("localhost:3000".to_owned()));
-    if ret.is_ok() {
-        println!("Started server on port 3000");
+
+    let index = warp::path("favicon.ico")
+                     .and(warp::header::<String>("accept-encoding"))
+                     .map(|_encoding: String| {
+        return_gzip_or_not!(_encoding, FAVICON, "image/x-icon")
+    });
+    let update = warp::path("sysinfo.json")
+                     .and(warp::header::<String>("accept-encoding"))
+                     .map(move |_encoding: String| {
+        data_handler.update_last_connection();
+        let x = data_handler.json_output.read().unwrap().clone().as_bytes().to_owned();
+        return_gzip_or_not!(_encoding,
+                            x.as_slice(),
+                            "application/json")
+    });
+    let index2 = warp::index()
+                     .and(warp::header::<String>("accept-encoding"))
+                     .map(|_encoding: String| {
+        return_gzip_or_not!(_encoding, INDEX_HTML, "text/html")
+    });
+
+    let routes = warp::get2().and(index.or(update).or(index2)).recover(customize_error);
+
+    match sock_addr {
+        Some(s) => {
+            let addr: SocketAddr = match s.parse() {
+                Ok(a) => a,
+                Err(e) => {
+                    println!("Invalid IP address: {:?}", e);
+                    return Err(());
+                }
+            };
+            warp::serve(routes).run(addr);
+        }
+        None => {
+            println!("Starting on 127.0.0.1:4321");
+            warp::serve(routes).run(([127, 0, 0, 1], 4321));
+        }
     }
-    ret
+    Ok(())
 }
